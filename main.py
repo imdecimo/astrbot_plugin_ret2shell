@@ -266,7 +266,7 @@ class Ret2ShellPlugin(Star):
 
         game_name = await self._get_game_name()
 
-        lines = [f"🚩 【{game_name}】"]
+        lines = [f"【{game_name}】"]
 
         if event_kind == "challenge":
             challenge = event_data.get("challenge", {})
