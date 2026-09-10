@@ -5,19 +5,6 @@
     "hint": "从 Ret2Shell 平台获取的 WebSocket 地址",
     "obvious_hint": true
   },
-  "ret2shell_account": {
-    "description": "赛事管理员用户名（可选）",
-    "type": "string",
-    "hint": "用于获取提示详情等敏感信息",
-    "default": ""
-  },
-  "ret2shell_password": {
-    "description": "赛事管理员密码（可选）",
-    "type": "string",
-    "hint": "与用户名配合使用",
-    "default": "",
-    "invisible": true
-  },
   "public_umo": {
     "description": "公开播报目标 UMO",
     "type": "list",

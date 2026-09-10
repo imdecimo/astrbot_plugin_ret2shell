@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import httpx
 from websockets.asyncio.client import connect
@@ -10,14 +10,13 @@ from websockets.asyncio.client import connect
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
-import astrbot.api.message_components as Comp
 
 
 @register(
     "astrbot_plugin_ret2shell",
     "decimo",
     "Ret2Shell 赛事事件推送插件",
-    "1.1.2",
+    "1.2.0",
     repo="https://github.com/xiaochai-123/astrbot_plugin_ret2shell"
 )
 class Ret2ShellPlugin(Star):
@@ -50,6 +49,10 @@ class Ret2ShellPlugin(Star):
         self.running = False
         self._game_start_time = None
         self._game_end_time = None
+
+        self._game_name_cache = None
+        self._game_name_cache_time = 0
+        self._game_name_cache_ttl = 1800
 
         logger.info(f"🔍 ws_url 已配置: {bool(self.ws_url)}")
         logger.info(f"📢 public_umo: {self.public_umo}")
@@ -94,7 +97,7 @@ class Ret2ShellPlugin(Star):
         self.api_base_url = f'{"https" if scheme == "wss" else "http"}://{socket}/api'
         self.client = httpx.AsyncClient(
             base_url=self.api_base_url,
-            headers={"User-Agent": "astrbot-ret2shell/1.0.0"}
+            headers={"User-Agent": "astrbot-ret2shell/1.2.0"}
         )
         self.game_id = dict(parse_qsl(urlparsed.query)).get("game_id") or ""
 
@@ -137,24 +140,29 @@ class Ret2ShellPlugin(Star):
             logger.error(f"获取赛事时间失败: {e}")
 
     async def _get_game_name(self) -> str:
-        """获取赛事名称"""
+        """获取赛事名称（带 30 分钟缓存，避免每条事件都请求 API）"""
+        now = time.time()
+        if self._game_name_cache and (now - self._game_name_cache_time) < self._game_name_cache_ttl:
+            return self._game_name_cache
         try:
             data = await self._http_get(f"/game/{self.game_id}")
             if data:
-                return data.get("name", "Ret2Shell 赛事")
+                self._game_name_cache = data.get("name", "Ret2Shell 赛事")
+                self._game_name_cache_time = now
+                return self._game_name_cache
         except Exception:
             pass
-        return "Ret2Shell 赛事"
+        return self._game_name_cache or "Ret2Shell 赛事"
 
     async def _delayed_game_start(self, delay: float):
         await asyncio.sleep(delay)
         game_name = await self._get_game_name()
-        await self._broadcast_message(f"🏁 【{game_name}】比赛已开始！")
+        await self._broadcast_message(f"🚀 【{game_name}】比赛已开始！")
 
     async def _delayed_game_end(self, delay: float):
         await asyncio.sleep(delay)
         game_name = await self._get_game_name()
-        await self._broadcast_message(f"🎉 【{game_name}】比赛已结束！")
+        await self._broadcast_message(f"🏁 【{game_name}】比赛已结束！")
 
     async def _broadcast_message(self, message: str):
         if not self.public_umo:
@@ -256,16 +264,9 @@ class Ret2ShellPlugin(Star):
         """格式化事件消息，返回 (消息内容, 消息类型)"""
         msg_type = "public"
 
-        game_name = "Ret2Shell 赛事"
-        if self.game_id:
-            try:
-                game_data = await self._http_get(f"/game/{self.game_id}")
-                if game_data:
-                    game_name = game_data.get("name", "Ret2Shell 赛事")
-            except Exception as e:
-                logger.debug(f"获取赛事名称失败: {e}")
+        game_name = await self._get_game_name()
 
-        lines = [f"🎯 【{game_name}】"]
+        lines = [f"🚩 【{game_name}】"]
 
         if event_kind == "challenge":
             challenge = event_data.get("challenge", {})
@@ -366,7 +367,7 @@ class Ret2ShellPlugin(Star):
         start_str = time.strftime("%Y/%m/%d %H:%M", time.localtime(start_at)) if start_at else "未知"
         end_str = time.strftime("%Y/%m/%d %H:%M", time.localtime(end_at)) if end_at else "未知"
 
-        msg = f"""🎯 赛事: {name}
+        msg = f"""🚩 赛事: {name}
 📝 简介: {brief}
 🕐 时间: {start_str} - {end_str}
 🔗 链接: {self.api_base_url.replace('/api', '')}/games/{self.game_id}"""
@@ -374,91 +375,28 @@ class Ret2ShellPlugin(Star):
 
     @filter.command("rank")
     async def query_rank(self, event: AstrMessageEvent):
-        """查询积分排行：/rank 或 /rank [标签]"""
+        """查询积分排行前十"""
         if not self.game_id:
             yield event.plain_result("❌ 未配置有效的 WebSocket 链接")
             return
 
-        args = event.message_str.strip().split()
-        tag = args[1] if len(args) > 1 else None
+        data = await self._http_get(f"/game/{self.game_id}/team?page=1&page_size=10&order=score&asc=false&min_state=3")
+        if not data:
+            yield event.plain_result("❌ 获取总榜失败")
+            return
 
-        if tag:
-            # 方向榜
-            data = await self._http_get(f"/game/{self.game_id}/challenge/")
-            logger.info(f"🔍 方向排行 API 返回: {data}")
+        teams = data[0] if isinstance(data, list) and data else []
+        if not teams:
+            yield event.plain_result("🏆 暂无队伍得分")
+            return
 
-            if not data:
-                yield event.plain_result("❌ 获取方向排行失败")
-                return
+        lines = ["🏆 积分板"]
+        medals = ["🥇", "🥈", "🥉"]
+        for i, t in enumerate(teams):
+            medal = medals[i] if i < 3 else f"{i+1}."
+            lines.append(f"{medal} {t.get('name', '未知')}: {t.get('score', 0)} pts")
 
-            # 解析数据
-            if isinstance(data, list) and len(data) > 0:
-                challenges = data[0] if isinstance(data[0], list) else data
-            else:
-                challenges = data if isinstance(data, list) else []
-
-            # 筛选匹配标签的题目
-            tag_challenges = []
-            for c in challenges:
-                if not isinstance(c, dict):
-                    continue
-                tags = c.get("tag", [])
-                if tags:
-                    tag_name = tags[0].get("name", "") if isinstance(tags, list) and tags else ""
-                    if tag_name.lower() == tag.lower():
-                        tag_challenges.append(c)
-
-            if not tag_challenges:
-                yield event.plain_result(f"❔ 找不到标签: {tag}")
-                return
-
-            # 计算每个队伍的得分
-            team_scores = {}
-            for c in tag_challenges:
-                cid = c.get("id")
-                if not cid:
-                    continue
-                sub_data = await self._http_get(f"/game/{self.game_id}/challenge/{cid}/submission")
-                if sub_data:
-                    subs = sub_data[0] if isinstance(sub_data, list) and sub_data else []
-                    for s in subs:
-                        team_name = s.get("team_name")
-                        if team_name:
-                            team_scores[team_name] = team_scores.get(team_name, 0) + s.get("score", 0)
-
-            sorted_teams = sorted(team_scores.items(), key=lambda x: -x[1])[:10]
-
-            if not sorted_teams:
-                yield event.plain_result(f"🏆 [{tag}] 方向暂无得分")
-                return
-
-            lines = [f"🏆 [{tag}] 方向排名"]
-            medals = ["🥇", "🥈", "🥉"]
-            for i, (name, score) in enumerate(sorted_teams):
-                medal = medals[i] if i < 3 else f"{i+1}."
-                lines.append(f"{medal} {name}: {score} pts")
-
-            yield event.plain_result("\n".join(lines))
-
-        else:
-            # 总榜
-            data = await self._http_get(f"/game/{self.game_id}/team?page=1&page_size=10&order=score&asc=false&min_state=3")
-            if not data:
-                yield event.plain_result("❌ 获取总榜失败")
-                return
-
-            teams = data[0] if isinstance(data, list) and data else []
-            if not teams:
-                yield event.plain_result("🏆 暂无队伍得分")
-                return
-
-            lines = ["🏆 积分板"]
-            medals = ["🥇", "🥈", "🥉"]
-            for i, t in enumerate(teams):
-                medal = medals[i] if i < 3 else f"{i+1}."
-                lines.append(f"{medal} {t.get('name', '未知')}: {t.get('score', 0)} pts")
-
-            yield event.plain_result("\n".join(lines))
+        yield event.plain_result("\n".join(lines))
 
     @filter.command("challenge")
     async def query_challenge(self, event: AstrMessageEvent):
@@ -494,7 +432,7 @@ class Ret2ShellPlugin(Star):
         submit_data = await self._http_get(f"/game/{self.game_id}/challenge/{challenge_id}/submit")
         solves = submit_data.get("solves", 0) if submit_data else 0
 
-        msg = f"""🚩 题目: [{name}]
+        msg = f"""🎯 题目: [{name}]
 🏷️ 方向: [{tag_name}]
 📊 当前分数: {score} pts
 👥 已解出数: {solves}"""
