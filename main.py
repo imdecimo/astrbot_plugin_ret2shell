@@ -307,7 +307,7 @@ class Ret2ShellPlugin(Star):
             elif event_type == "cheated":
                 peer_team = event_data.get("peer_team", {})
                 peer_team_name = peer_team.get("name", "未知队伍")
-                lines = [f"⚠️ 【{game_name}】检测到作弊行为！！!⚠️"]
+                lines = [f"🚨【{game_name}】检测到作弊行为！！!"]
                 lines.append(f"🤥 {team_name} 提交了 {peer_team_name} 的 [{tag_name}] {challenge_name} 题目的 flag")
                 msg_type = "admin"
 
