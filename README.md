@@ -7,7 +7,7 @@
 | 插件版本 | `1.3.0` |
 | 要求 AstrBot | `>= 4.17.0` |
 | 支持平台 | `aiocqhttp`、`qq_official` |
-| 仓库 | <https://github.com/xiaochai-123/astrbot_plugin_ret2shell> |
+| 仓库 | <https://github.com/imdecimo/astrbot_plugin_ret2shell> |
 
 ## ✨ 功能特性
 
