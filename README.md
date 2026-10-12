@@ -25,7 +25,7 @@
 在 AstrBot 管理面板的 **插件市场** 搜索 `Ret2Shell`，或按下面任一方式手动安装：
 
 - **从链接安装**：在「已安装」或「插件市场」页面点击右下角的 **安装插件（+）**，选择「从链接安装」，填入本仓库地址
-  `https://github.com/xiaochai-123/astrbot_plugin_ret2shell`
+  `https://github.com/imdecimo/astrbot_plugin_ret2shell`
 - **从文件安装**：从作者处获取 `.zip` 安装包，同一入口选择「从文件安装」
 
 安装后回到「已安装」页面确认加载状态。如果显示加载失败，去 **数据与日志 → 日志** 看具体报错。
