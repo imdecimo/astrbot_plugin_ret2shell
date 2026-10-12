@@ -16,7 +16,7 @@ from astrbot.api.star import Context, Star, register
     "astrbot_plugin_ret2shell",
     "decimo",
     "Ret2Shell 赛事事件推送插件",
-    "1.2.1",
+    "1.2.2",
     repo="https://github.com/xiaochai-123/astrbot_plugin_ret2shell"
 )
 class Ret2ShellPlugin(Star):
@@ -97,7 +97,7 @@ class Ret2ShellPlugin(Star):
         self.api_base_url = f'{"https" if scheme == "wss" else "http"}://{socket}/api'
         self.client = httpx.AsyncClient(
             base_url=self.api_base_url,
-            headers={"User-Agent": "astrbot-ret2shell/1.2.1"}
+            headers={"User-Agent": "astrbot-ret2shell/1.2.2"}
         )
         self.game_id = dict(parse_qsl(urlparsed.query)).get("game_id") or ""
 
