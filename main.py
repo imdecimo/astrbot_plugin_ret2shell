@@ -311,6 +311,10 @@ class Ret2ShellPlugin(Star):
                 lines = [f"🚨【{game_name}】检测到作弊行为！！!"]
                 lines.append(f"🤥 {team_name} 提交了 {peer_team_name} 的 [{tag_name}] {challenge_name} 题目的 flag")
                 msg_type = "admin"
+            
+            elif event_type == "too_quick":
+                lines.append(f"💥 {team_name} 提交 [{tag_name}] {challenge_name} 过快！")
+                msg_type = "admin"
 
         elif event_kind == "game":
             event_type = event_data.get("event_type", "unknown")
